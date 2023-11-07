@@ -6,7 +6,7 @@
 /*   By: sergisan <sergisan@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/09/14 14:04:53 by sergisan          #+#    #+#             */
-/*   Updated: 2023/11/07 12:27:24 by sergisan         ###   ########.fr       */
+/*   Updated: 2023/11/07 16:09:03 by sergisan         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -80,9 +80,7 @@ int	main(int argc, char **argv)
 
 	stack_a = NULL;
 	stack_b = NULL;
-	if (argc < 2)
-		ft_error("Error");
-	else
+	if (argc > 1)
 	{
 		if (argc != 2)
 			ft_checker_values(argv, &stack_a);
