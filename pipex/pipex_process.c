@@ -16,7 +16,7 @@ void	child_proccess(char **environment, char **argv, int *aux_fileD)
 {
 	int	file_descript;
 
-	file_descript = open(argv[1], O_CREAT | O_RDWR | O_TRUNC, 0644);
+	file_descript = open(argv[1], O_RDONLY);
 	if (file_descript == -1)
 		exit(0);
 	dup2(file_descript, STDIN_FILENO);
