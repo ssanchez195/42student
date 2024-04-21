@@ -18,9 +18,11 @@ typedef struct s_god
 	int				time_to_eat;
 	int				time_to_sleep;
 	int				philo_is_dead;
+	long			start_time;
 	pthread_mutex_t die_mutex;
 	pthread_mutex_t	forks[200];
 	pthread_mutex_t	prints_lock;
+	pthread_mutex_t	eat_mutex;
 	t_philo			*philo;
 }	t_god;
 
@@ -43,7 +45,7 @@ int	start_simulation(t_god *god, t_philo *philo);
 int	is_numeric(char *argv);
 int	ft_atoi(char *num);
 int	god_checks_time(t_philo *philo, t_god *god);
-long	get_current_ms(void);
+long long	get_current_ms(void);
 void	ft_usleep(t_philo *philo, long long max_action_time);
 void	god_args(char **argv, t_god *god);
 void	save_philos_info(t_philo *philo, t_god *god);

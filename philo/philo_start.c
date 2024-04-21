@@ -10,7 +10,7 @@ int	check_arguments(char **argv)
 		return (write (1, "Tiempo de comer incorrecto", 27), 1);
 	if (ft_atoi(argv[4]) <= 0 || is_numeric(argv[4]) == 1)
 		return (write (1, "Tiempo de dormir incorrecto", 28), 1);
-	if (argv[5] && (ft_atoi(argv[5]) < 0 || is_numeric(argv[5]) == 1))
+	if (argv[5] && (ft_atoi(argv[5]) <= 0 || is_numeric(argv[5]) == 1))
 		return (write (1, "Numero de comidas por filosofo incorrecto", 42), 1);
 	return (0);
 }
@@ -37,17 +37,38 @@ void	save_philos_info(t_philo *philo, t_god *god)
 	i = 0;
 	while (i < god->philo_count)
 	{
-		philo[i].start_time = get_current_ms();
 		//printf("Tiempo de inicio del filosofo %d: %llu\n", i + 1, philo[i].start_time);
 		philo[i].id = i + 1;
+		philo[i].last_eat = 0;
 		philo[i].left_fork = i;
 		if (i == god->philo_count - 1)
 			philo[i].right_fork = 0;
 		else
 			philo[i].right_fork = (i + 1) % god->philo_count;
 		philo[i].times_eaten = 0;
+		philo[i].god = god;
 		i++;
 	}
+}
+
+int	init_mutexes(t_god *god)
+{
+	int	i;
+
+	i = 0;
+	while (i < god->philo_count)
+	{
+		if (pthread_mutex_init(&god->forks[i], NULL))
+			return (1);
+		i++;
+	}
+	if (pthread_mutex_init(&god->die_mutex, NULL))
+		return (1);
+	if (pthread_mutex_init(&god->prints_lock, NULL))
+		return (1);
+	if (pthread_mutex_init(&god->eat_mutex, NULL))
+		return (1);
+	return (0);
 }
 
 int	start_simulation(t_god *god, t_philo *philo)
@@ -55,28 +76,26 @@ int	start_simulation(t_god *god, t_philo *philo)
 	int				i;
 
 	i = 0;
-	/*if (philo->god->philo_count == 1)
-	{
-		usleep (philo->god->time_to_die * 1000);
-		printf("El filosofo 1 ha muerto\n");
-		return (0);
-	}*/
-	pthread_mutex_init(&god->die_mutex, NULL);
-	pthread_mutex_init(&god->prints_lock, NULL);
+	god->start_time = get_current_ms();
 	while (i != god->philo_count)
 	{
-		philo[i].god = god;
-		pthread_mutex_init(&god->forks[i], NULL);
 		if (pthread_create(&philo[i].thread, NULL, philo_sequence, &philo[i]) != 0)
-			return (printf("Error al crear el hilo del filosofo%d\n", i + 1), 1);
+		{
+			printf("Error al crear el hilo del filosofo -> %d\n", i + 1);
+			return (1);
+		}
+		philo[i].start_time = get_current_ms();
 		i++;
 	}
+	//philo is death
+	//philo exit
 	return (0);
 }
 
 void	god_sees_everything(t_god *god, t_philo *philo)
 {
-	int 	i;
+	int 		i;
+	long long	time;
 
 	i = 1;
 	while (1)
@@ -85,13 +104,14 @@ void	god_sees_everything(t_god *god, t_philo *philo)
 			i = 0;
 		else
 			i = 1;
-		if (get_current_ms() - philo[i].last_eat > god->time_to_die)
+		pthread_mutex_lock(&god->eat_mutex);
+		time = get_current_ms() - god->start_time - philo[i].last_eat;
+		pthread_mutex_unlock(&god->eat_mutex);
+		if (time >= god->time_to_die)
 		{
+			print_message(&philo[i], god, "died", philo[i].id);
 			pthread_mutex_lock(&god->die_mutex);
 			god->philo_is_dead = 1;
-		}
-		if (god->philo_is_dead == 1)
-		{
 			pthread_mutex_unlock(&god->die_mutex);
 			break ;
 		}
@@ -106,9 +126,6 @@ void	*philo_sequence(void *info)
 
 	philo = (t_philo *)info;
 	god = philo->god;
-	if (god->times_must_eat == 0)
-		return (0);
-	philo->last_eat = get_current_ms();
 	if (philo->id % 2 == 0)
 		ft_usleep(philo, 50);
 	while (god->philo_is_dead == 0)
@@ -118,8 +135,10 @@ void	*philo_sequence(void *info)
 		philo_sleeps(philo, god);
 		philo_thinks(philo);
 	}
+	pthread_mutex_lock(&god->die_mutex);
 	if (god->philo_is_dead == 1)
 		write(1, "HolaEstoyMUERTOOOO", 18);
+	pthread_mutex_unlock(&god->die_mutex);
 	return (NULL);
 }
 
@@ -128,23 +147,52 @@ void	print_message(t_philo *philo, t_god *god, char *message, int id)
 {
 	pthread_mutex_lock(&god->prints_lock);
 	if (philo->god->philo_is_dead == 0)
-		printf("%llu %d %s\n", get_current_ms() - philo->start_time, id, message);
+		printf("%lld %d %s\n", get_current_ms() - god->start_time, id, message);
 	pthread_mutex_unlock(&god->prints_lock);
 }
 
-void	philo_eats(t_philo *philo, t_god *god)
+void lock_forks(t_god *god, int left_fork, int right_fork)
 {
-	pthread_mutex_lock(&(god->forks[philo->left_fork]));
-	print_message(philo, god, "has taken a fork", philo->id);
-	pthread_mutex_lock(&(god->forks[philo->right_fork]));
-	print_message(philo, god, "has taken a fork", philo->id);
-	print_message(philo, god, "is eating", philo->id);
-	ft_usleep(philo, god->time_to_eat);
-	//printf("El filosofo %d ha terminado de comer con un tiempo de:%lu\n", philo->id, get_current_ms());
-	philo->last_eat = get_current_ms();
-	philo->times_eaten++;
-	pthread_mutex_unlock(&(god->forks[philo->left_fork]));
-	pthread_mutex_unlock(&(god->forks[philo->right_fork]));
+    if (left_fork < right_fork)
+    {
+        pthread_mutex_lock(&(god->forks[left_fork]));
+        pthread_mutex_lock(&(god->forks[right_fork]));
+    }
+    else
+    {
+        pthread_mutex_lock(&(god->forks[right_fork]));
+        pthread_mutex_lock(&(god->forks[left_fork]));
+    }
+}
+
+void unlock_forks(t_god *god, int left_fork, int right_fork)
+{
+    if (left_fork < right_fork)
+    {
+        pthread_mutex_unlock(&(god->forks[right_fork]));
+        pthread_mutex_unlock(&(god->forks[left_fork]));
+    }
+    else
+    {
+        pthread_mutex_unlock(&(god->forks[left_fork]));
+        pthread_mutex_unlock(&(god->forks[right_fork]));
+    }
+}
+
+void philo_eats(t_philo *philo, t_god *god)
+{
+    int left_fork = philo->left_fork;
+    int right_fork = philo->right_fork;
+
+    lock_forks(god, left_fork, right_fork);
+    print_message(philo, god, "has taken a fork", philo->id);
+    print_message(philo, god, "is eating", philo->id);
+    pthread_mutex_lock(&god->eat_mutex);
+    philo->last_eat = get_current_ms();
+    pthread_mutex_unlock(&god->eat_mutex);
+    ft_usleep(philo, god->time_to_eat);
+    philo->times_eaten++;
+    unlock_forks(god, left_fork, right_fork);
 }
 
 void	philo_sleeps(t_philo *philo, t_god *god)
@@ -156,15 +204,16 @@ void	philo_sleeps(t_philo *philo, t_god *god)
 void	philo_thinks(t_philo *philo)
 {
 	print_message(philo, philo->god, "is thinking", philo->id);
-	ft_usleep(philo, philo->god->time_to_sleep / 2);
 }
 
-long	get_current_ms(void)
+long long	get_current_ms(void)
 {
 	struct timeval		tv;
+	time_t 				time;
 
 	gettimeofday(&tv, NULL);
-	return ((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+	time = (tv.tv_sec * 1000) + (tv.tv_usec / 1000);
+	return (time);
 }
 
 void	ft_usleep(t_philo *philo, long long max_action_time)
@@ -172,12 +221,11 @@ void	ft_usleep(t_philo *philo, long long max_action_time)
 	long	time_up;
 
 	time_up = get_current_ms() + max_action_time;
-	//printf("El filosofo %d tiene un time_up de %lu\n", philo->id, time_up - get_current_ms());
 	while (philo->god->philo_is_dead == 0)
 	{
 		if (get_current_ms() >= time_up)
 			break;
-		usleep(20 * 1000);
+		usleep(50);
 	}
 }
 
@@ -193,13 +241,11 @@ int main(int argc, char **argv)
 		philo = malloc(sizeof(t_philo) * ft_atoi(argv[1]));
 		god = malloc(sizeof(t_god));
 		god_args(argv, god);
+		init_mutexes(god);
 		save_philos_info(philo, god);
 		if (start_simulation(god, philo))
 			return (write(1, "Error al inicializar los hilos", 31), 1);
 		god_sees_everything(god, philo);
-		//printf("El current time es %llu\n", get_current_ms() - philo->start_time);
-		//printf("El filosofo que salio del hilo fue el %d\n", philo->id);
-		//printf("El filosofo %d tiene un valor de philo_is_dead de %i\n", philo->id, god->philo_is_dead);
 	}
 	else
 	{
