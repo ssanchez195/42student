@@ -9,7 +9,8 @@
 
 NAME		:= philo
 CC		:= gcc
-FLAGS	:= -Wall -Wextra -Werror 
+FLAGS	:= -fsanitize=thread -Wall -Wextra -Werror
+#-fsanitize=thread  
 ################################################################################
 #								 PROGRAM'S SRCS							   #
 ################################################################################

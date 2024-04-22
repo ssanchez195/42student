@@ -39,7 +39,7 @@ void	save_philos_info(t_philo *philo, t_god *god)
 	{
 		//printf("Tiempo de inicio del filosofo %d: %llu\n", i + 1, philo[i].start_time);
 		philo[i].id = i + 1;
-		philo[i].last_eat = 0;
+		philo[i].last_eat = get_current_ms();
 		philo[i].left_fork = i;
 		if (i == god->philo_count - 1)
 			philo[i].right_fork = 0;
@@ -77,8 +77,9 @@ int	start_simulation(t_god *god, t_philo *philo)
 
 	i = 0;
 	god->start_time = get_current_ms();
-	while (i != god->philo_count)
+	while (i < god->philo_count)
 	{
+		philo[i].last_eat = get_current_ms();
 		if (pthread_create(&philo[i].thread, NULL, philo_sequence, &philo[i]) != 0)
 		{
 			printf("Error al crear el hilo del filosofo -> %d\n", i + 1);
@@ -87,6 +88,7 @@ int	start_simulation(t_god *god, t_philo *philo)
 		philo[i].start_time = get_current_ms();
 		i++;
 	}
+	god_sees_everything(god, philo);
 	//philo is death
 	//philo exit
 	return (0);
@@ -96,26 +98,26 @@ void	god_sees_everything(t_god *god, t_philo *philo)
 {
 	int 		i;
 	long long	time;
-
-	i = 1;
+		
 	while (1)
 	{
-		if (i == god->philo_count)
-			i = 0;
-		else
-			i = 1;
-		pthread_mutex_lock(&god->eat_mutex);
-		time = get_current_ms() - god->start_time - philo[i].last_eat;
-		pthread_mutex_unlock(&god->eat_mutex);
-		if (time >= god->time_to_die)
+		i = 0;
+		while(i < god->philo_count)
 		{
-			print_message(&philo[i], god, "died", philo[i].id);
-			pthread_mutex_lock(&god->die_mutex);
-			god->philo_is_dead = 1;
-			pthread_mutex_unlock(&god->die_mutex);
-			break ;
+			pthread_mutex_lock(&god->eat_mutex);
+			time = get_current_ms() - philo[i].last_eat;
+			pthread_mutex_unlock(&god->eat_mutex);
+			if (time > god->time_to_die)
+			{
+				print_message(&philo[i], god, "died", philo[i].id);
+				pthread_mutex_lock(&god->die_mutex);
+				god->philo_is_dead = 1;
+				pthread_mutex_unlock(&god->die_mutex);
+				return;
+			}
+			i++;
 		}
-		usleep(5 * 1000);
+	usleep(5 * 1000);
 	}
 }
 
@@ -127,27 +129,27 @@ void	*philo_sequence(void *info)
 	philo = (t_philo *)info;
 	god = philo->god;
 	if (philo->id % 2 == 0)
-		ft_usleep(philo, 50);
+		ft_usleep(philo, 10);
+	pthread_mutex_lock(&god->die_mutex);
 	while (god->philo_is_dead == 0)
 	{
-		//printf("Los milisegundos son: %lu\n", get_current_ms());
+		pthread_mutex_unlock(&god->die_mutex);
 		philo_eats(philo, god);
 		philo_sleeps(philo, god);
 		philo_thinks(philo);
+		pthread_mutex_lock(&god->die_mutex);
 	}
-	pthread_mutex_lock(&god->die_mutex);
-	if (god->philo_is_dead == 1)
-		write(1, "HolaEstoyMUERTOOOO", 18);
 	pthread_mutex_unlock(&god->die_mutex);
 	return (NULL);
 }
 
-
 void	print_message(t_philo *philo, t_god *god, char *message, int id)
 {
 	pthread_mutex_lock(&god->prints_lock);
+	pthread_mutex_lock(&god->die_mutex);
 	if (philo->god->philo_is_dead == 0)
 		printf("%lld %d %s\n", get_current_ms() - god->start_time, id, message);
+	pthread_mutex_unlock(&god->die_mutex);
 	pthread_mutex_unlock(&god->prints_lock);
 }
 
@@ -186,6 +188,7 @@ void philo_eats(t_philo *philo, t_god *god)
 
     lock_forks(god, left_fork, right_fork);
     print_message(philo, god, "has taken a fork", philo->id);
+	print_message(philo, god, "has taken a fork", philo->id);
     print_message(philo, god, "is eating", philo->id);
     pthread_mutex_lock(&god->eat_mutex);
     philo->last_eat = get_current_ms();
@@ -229,6 +232,15 @@ void	ft_usleep(t_philo *philo, long long max_action_time)
 	}
 }
 
+void thread_destroy(t_philo *philo, t_god *god)
+{
+    int i;
+
+	i = 0;
+    while (i < god->philo_count)
+        pthread_join(philo[i++].thread, NULL);
+}
+
 int main(int argc, char **argv)
 {
 	t_philo	*philo;
@@ -245,7 +257,7 @@ int main(int argc, char **argv)
 		save_philos_info(philo, god);
 		if (start_simulation(god, philo))
 			return (write(1, "Error al inicializar los hilos", 31), 1);
-		god_sees_everything(god, philo);
+		thread_destroy(philo, god);
 	}
 	else
 	{
