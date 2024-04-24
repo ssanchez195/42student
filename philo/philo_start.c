@@ -39,7 +39,7 @@ void	save_philos_info(t_philo *philo, t_god *god)
 	{
 		//printf("Tiempo de inicio del filosofo %d: %llu\n", i + 1, philo[i].start_time);
 		philo[i].id = i + 1;
-		philo[i].last_eat = get_current_ms();
+		philo[i].last_eat = 0;
 		philo[i].left_fork = i;
 		if (i == god->philo_count - 1)
 			philo[i].right_fork = 0;
@@ -89,32 +89,35 @@ int	start_simulation(t_god *god, t_philo *philo)
 		i++;
 	}
 	god_sees_everything(god, philo);
-	//philo is death
-	//philo exit
 	return (0);
 }
 
 void	god_sees_everything(t_god *god, t_philo *philo)
 {
 	int 		i;
+	int			times_eaten;
 	long long	time;
 		
 	while (1)
 	{
+		pthread_mutex_lock(&god->eat_mutex);
+        times_eaten = philo->times_eaten;
+        pthread_mutex_unlock(&god->eat_mutex);
+		if (times_eaten == god->times_must_eat)
+        	break ;
 		i = 0;
-		while(i < god->philo_count)
+		while(i < god->philo_count && god->philo_is_dead == 0)
 		{
 			pthread_mutex_lock(&god->eat_mutex);
 			time = get_current_ms() - philo[i].last_eat;
-			pthread_mutex_unlock(&god->eat_mutex);
 			if (time > god->time_to_die)
 			{
 				print_message(&philo[i], god, "died", philo[i].id);
-				pthread_mutex_lock(&god->die_mutex);
 				god->philo_is_dead = 1;
-				pthread_mutex_unlock(&god->die_mutex);
-				return;
+				pthread_mutex_unlock(&god->eat_mutex);
+				return ;
 			}
+			pthread_mutex_unlock(&god->eat_mutex);
 			i++;
 		}
 	usleep(5 * 1000);
@@ -125,6 +128,7 @@ void	*philo_sequence(void *info)
 {
 	t_philo	*philo;
 	t_god	*god;
+	int		times_eaten;
 
 	philo = (t_philo *)info;
 	god = philo->god;
@@ -138,6 +142,11 @@ void	*philo_sequence(void *info)
 		philo_sleeps(philo, god);
 		philo_thinks(philo);
 		pthread_mutex_lock(&god->die_mutex);
+        pthread_mutex_lock(&god->eat_mutex);
+        times_eaten = philo->times_eaten;
+        pthread_mutex_unlock(&god->eat_mutex);
+		if (times_eaten == god->times_must_eat)
+			break ;
 	}
 	pthread_mutex_unlock(&god->die_mutex);
 	return (NULL);
@@ -194,7 +203,9 @@ void philo_eats(t_philo *philo, t_god *god)
     philo->last_eat = get_current_ms();
     pthread_mutex_unlock(&god->eat_mutex);
     ft_usleep(philo, god->time_to_eat);
+    pthread_mutex_lock(&god->eat_mutex);
     philo->times_eaten++;
+    pthread_mutex_unlock(&god->eat_mutex);
     unlock_forks(god, left_fork, right_fork);
 }
 
@@ -221,24 +232,37 @@ long long	get_current_ms(void)
 
 void	ft_usleep(t_philo *philo, long long max_action_time)
 {
-	long	time_up;
+    long	time_up;
 
-	time_up = get_current_ms() + max_action_time;
-	while (philo->god->philo_is_dead == 0)
-	{
-		if (get_current_ms() >= time_up)
-			break;
-		usleep(50);
-	}
+    time_up = get_current_ms() + max_action_time;
+    while (1)
+    {
+        pthread_mutex_lock(&philo->god->eat_mutex);
+        if (philo->god->philo_is_dead == 1)
+        {
+            pthread_mutex_unlock(&philo->god->eat_mutex);
+            break;
+        }
+        pthread_mutex_unlock(&philo->god->eat_mutex);
+        if (get_current_ms() >= time_up)
+            break;
+        usleep(50);
+    }
 }
-
+//die mutex, prints lock, eat mutex
 void thread_destroy(t_philo *philo, t_god *god)
 {
-    int i;
+	int i;
 
 	i = 0;
-    while (i < god->philo_count)
-        pthread_join(philo[i++].thread, NULL);
+	while (i < god->philo_count)
+		pthread_join(philo[i++].thread, NULL);
+	i = 0;
+	while (i < god->philo_count)
+		pthread_mutex_destroy(&(god->forks[i++]));
+	pthread_mutex_destroy(&(god->die_mutex));
+	pthread_mutex_destroy(&(god->prints_lock));
+	pthread_mutex_destroy(&(god->eat_mutex));
 }
 
 int main(int argc, char **argv)
@@ -258,6 +282,9 @@ int main(int argc, char **argv)
 		if (start_simulation(god, philo))
 			return (write(1, "Error al inicializar los hilos", 31), 1);
 		thread_destroy(philo, god);
+		//Me gustaria comprobar si estos frees son necesarios y si dan algun error
+		free(philo);
+		free(god);
 	}
 	else
 	{
