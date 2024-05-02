@@ -45,6 +45,8 @@ int	start_simulation(t_god *god, t_philo *philo);
 int	is_numeric(char *argv);
 int	ft_atoi(char *num);
 int	god_checks_time(t_philo *philo, t_god *god);
+int	init_mutexes(t_god *god);
+int	lone_philo(t_philo *philo, t_god *god);
 long long	get_current_ms(void);
 void	ft_usleep(t_philo *philo, long long max_action_time);
 void	god_args(char **argv, t_god *god);
@@ -56,5 +58,8 @@ void	philo_sleeps(t_philo *philo, t_god *god);
 void	philo_thinks(t_philo *philo);
 void	max_action_time(t_philo *philo, int action_time);
 void	print_message(t_philo *philo, t_god *god, char *message, int id);
+void	lock_forks(t_god *god, int left_fork, int right_fork);
+void	unlock_forks(t_god *god, int left_fork, int right_fork);
+void	thread_destroy(t_philo *philo, t_god *god);
 
 #endif
