@@ -15,7 +15,6 @@ void	*philo_sequence(void *info)
 	pthread_mutex_lock(&god->die_mutex);
 	while (god->philo_is_dead == 0)
 	{
-		pthread_mutex_unlock(&god->die_mutex);
 		philo_eats(philo, god);
 		philo_sleeps(philo, god);
         pthread_mutex_lock(&god->eat_mutex);
@@ -35,6 +34,7 @@ void philo_eats(t_philo *philo, t_god *god)
     int left_fork = philo->left_fork;
     int right_fork = philo->right_fork;
 
+	pthread_mutex_unlock(&god->die_mutex);
     lock_forks(god, left_fork, right_fork);
     print_message(philo, god, "has taken a fork", philo->id);
 	print_message(philo, god, "has taken a fork", philo->id);

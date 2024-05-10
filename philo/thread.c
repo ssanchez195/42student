@@ -17,6 +17,8 @@ int	init_mutexes(t_god *god)
 		return (1);
 	if (pthread_mutex_init(&god->eat_mutex, NULL))
 		return (1);
+	if (pthread_mutex_init(&god->start_time_lock, NULL))
+		return (1);
 	return (0);
 }
 
@@ -30,6 +32,7 @@ void thread_destroy(t_philo *philo, t_god *god)
 	i = 0;
 	while (i < god->philo_count)
 		pthread_mutex_destroy(&(god->forks[i++]));
+	pthread_mutex_destroy(&(god->start_time_lock));
 	pthread_mutex_destroy(&(god->die_mutex));
 	pthread_mutex_destroy(&(god->prints_lock));
 	pthread_mutex_destroy(&(god->eat_mutex));

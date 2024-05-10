@@ -48,8 +48,10 @@ int	lone_philo(t_philo *philo, t_god *god)
 void	print_message(t_philo *philo, t_god *god, char *message, int id)
 {
 	pthread_mutex_lock(&god->prints_lock);
+	pthread_mutex_lock(&god->start_time_lock);
 	if (philo->god->philo_is_dead == 0)
 		printf("%lld %d %s\n", get_current_ms() - god->start_time, id, message);
+	pthread_mutex_unlock(&god->start_time_lock);
 	pthread_mutex_unlock(&god->prints_lock);
 }
 

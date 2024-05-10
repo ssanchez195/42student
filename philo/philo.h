@@ -23,6 +23,7 @@ typedef struct s_god
 	pthread_mutex_t	forks[200];
 	pthread_mutex_t	prints_lock;
 	pthread_mutex_t	eat_mutex;
+	pthread_mutex_t	start_time_lock;
 	t_philo			*philo;
 }	t_god;
 

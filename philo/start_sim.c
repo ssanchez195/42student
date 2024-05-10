@@ -62,9 +62,15 @@ int	start_simulation(t_god *god, t_philo *philo)
 			return (1);
 		}
 		philo[i].start_time = get_current_ms();
+		if (i == 0)
+		{
+			pthread_mutex_lock(&god->start_time_lock);
+			god->start_time = philo[0].start_time;
+			pthread_mutex_unlock(&god->start_time_lock);
+
+		}
 		i++;
 	}
-	god->start_time = philo[0].start_time;
 	god_sees_everything(god, philo);
 	return (0);
 }
